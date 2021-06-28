@@ -7,71 +7,75 @@ import VegaLite exposing (..)
 myVis : Spec
 myVis =
     let
-{-
-        path : String
-        path = "../datasets/"
-    -}
-        weatherColors = categoricalDomainMap
-            [ ( "sun", "#e7ba52" )
-            , ( "fog", "#c7c7c7" )
-            , ( "drizzle", "#aec7ea" )
-            , ( "rain", "#1f77b4" )
-            , ( "snow", "#9467bd" ) ]
 
         path : String
-        path = "datasets/"
-        
-        bar1Enc = encoding
-                    << position X [ pName "date", pOrdinal, pTimeUnit month ]
-                    << position Y [ pName "precipitation", pAggregate opMean ]
+        path = "https://raw.githubusercontent.com/Lunastras/dataviz/main/datasets/"
 
-        bar2Enc = encoding
-                    << position X [ pName "date", pOrdinal, pTimeUnit month ]
-                    << position Y [ pName "temp_max", pAggregate opMean ]
+        worldMap = dataFromUrl (path ++ "eurasiaMed.json") [ topojsonFeature "polyMap" ]
 
-        encRep = encoding
-                    << position X [ pName "date", pOrdinal, pTimeUnit month ]
-                    << position Y [ pRepeat arRow, pAggregate opMean ]
+        data = dataFromUrl (path ++ "pleiades-locations.csv") 
 
-        spec = asSpec
-                    [ dataFromColumns (path ++ "seattle-weather.csv") []
-                    , encRep [] 
-                    , bar [] 
-                    ]
-
-        encScatter = encoding 
-                        << position X [ pRepeat arColumn, pQuant ]
-                        << position Y [ pRepeat arRow, pQuant ]
-
-        specScatter = asSpec [ dataFromColumns (path ++ "seattle-weather.csv") []
-                             , encScatter []
-                             , point [] 
-                             ]
-
-
-        enc = encoding
-                    << position X [ pName "maxDate", pOrdinal ]
-                    << position Y [ pAggregate opCount ]
-
+        trans = transform 
+                      << filter (fiSelection "mySelection")
+                      << filter (fiExpr "datum.featureType != 'unknown'")
+                      
+               
             
+ 
+
+        encLatLong = encoding
+                    << position Longitude [ pName "reprLong", pQuant ]
+                    << position Latitude [ pName "reprLat", pQuant ]
+                    << color [ mName "timePeriodsKeys"]
+                
+        encFrequency = encoding
+                        << position X [ pName "timePeriodsKeys", pOrdinal, pSort [ soByChannel chY, soDescending ] ]
+                        << position Y [ pAggregate opCount  ]
+                        << color [ mName "timePeriodsKeys" ]
+                    
+
+        sel = selection                          
+                << select "mySelection"
+                    seSingle
+                    [ seFields [ "featureType"]
+                    , seBind
+                        [ iText "featureType"  [] ]
+                    ]                  
+           
+        scatterSpec = asSpec
+                       [ circle [ maOpacity 0.4]
+                       , sel []
+                       , trans []
+                       , encLatLong []
+                       ]   
+
+        proj = projection [ prType mercator, prCenter -15 64, prScale 500 ]
+
+        worldSpec = asSpec
+                    [ worldMap
+                    , geoshape [ maFill "#F3EED1", maStrokeWidth 0.1, maStroke "black"  ]
+                    ] 
+
+        mapSpec = asSpec       
+                    [ width 800
+                    , height 650
+                    , proj
+                    , layer [ worldSpec, scatterSpec ]
+                    ]     
+
+        pieSpec = asSpec       
+                    [ height 400
+                    , encFrequency []
+                    , trans []
+                    , bar []
+                    ]               
+                             
+ 
     in
-    toVegaLite
-         [ title "aaa!" []
-        , repeat [ rowFields [ "temp_max", "precipitation", "wind" ] 
-                 , columnFields [ "wind", "precipitation", "temp_max" ]
-                 ]
-        , specification specScatter
-        ]
-
-        
-
-    {- 
-        [ dataFromUrl (path ++ "pleiades-locations.csv") []
-        , circle []
-        , enc []
-        ]
-        -}
-
+    toVegaLite 
+    [ data []
+    ,  hConcat [ mapSpec, pieSpec ]
+    ] 
 
 
 {- The code below is boilerplate for creating a headless Elm module that opens
